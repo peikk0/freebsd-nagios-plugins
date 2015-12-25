@@ -1,0 +1,105 @@
+#!/bin/sh
+
+pkg=/usr/local/sbin/pkg
+audit_file=/tmp/check_pkg_audit-vuln.xml
+audit_file_expire=1 # days
+do_not_fetch=0
+vuln_is_critical=0
+
+usage() {
+    echo "$0 [-c] [-e <days>] [-f <file>] [-n]"
+    echo "  -c: critical if vulnerabilities found (warning by default)"
+    echo "  -e <days>: audit file max age in days before fetching it"
+    echo "  -f <file>: audit file path (has to be writable unless -n is specified)"
+    echo "  -n: do not fetch audit file"
+    exit 0
+}
+
+ok() {
+    echo "PKG AUDIT OK: $1"
+    exit 0
+}
+
+warning() {
+    echo "PKG AUDIT WARNING: $1"
+    exit 1
+}
+
+critical() {
+    echo "PKG AUDIT CRITICAL: $1"
+    exit 2
+}
+
+unknown() {
+    echo "PKG AUDIT UNKNOWN: $1"
+    exit 3
+}
+
+perf_data() {
+    echo "vulnerable=$1;1;;0"
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -c)
+            vuln_is_critical=1
+            ;;
+        -e)
+            shift
+            if [ -z "$1" ]; then
+                unknown "Argument missing for -e"
+            fi
+            audit_file_expire="$1"
+            ;;
+        -f)
+            shift
+            if [ -z "$1" ]; then
+                unknown "Argument missing for -f"
+            fi
+            audit_file="$1"
+            ;;
+        -h)
+            usage
+            ;;
+        -n)
+            do_not_fetch=1
+            ;;
+        *)
+            unknown "Unexpected argument: $1"
+            ;;
+    esac
+    shift
+done
+
+if [ ! -x "${pkg}" ]; then
+    unknown "pkg executable not found"
+fi
+
+if [ ! -f "${audit_file}" -a "${do_not_fetch}" = 1 ]; then
+    critical "audit file not found"
+fi
+
+audit_file_age=`stat -f '%m' "${audit_file}" 2>/dev/null || echo 0`
+now=`date +%s`
+if [ $(( ${now} - ${audit_file_age} )) -ge $(( 86400 \* ${audit_file_expire} )) ]; then
+    if [ "${do_not_fetch}" = 1 ]; then
+        warning "audit file is older than ${audit_file_expire} days"
+    fi
+    fetch_audit_file="-F"
+fi
+
+pkg_vuln=`pkg audit -q -f "${audit_file}" "${fetch_audit_file}"`
+pkg_rc=$?
+
+if [ "${pkg_rc}" -eq 0 ]; then
+    ok "0 vulnerable package|$(perf_data 0)"
+else
+    pkg_vuln_count=`echo "${pkg_vuln}" | wc -l | tr -d '[:space:]'`
+    pkg_vuln_oneline=`echo "${pkg_vuln}" | xargs echo`
+    msg="${pkg_vuln_count} vulnerable package(s) - ${pkg_vuln_oneline}|$(perf_data ${pkg_vuln_count})"
+    if [ "${vuln_is_critical}" ]; then
+        critical "${msg}"
+    else
+        warning "${msg}"
+    fi
+fi
