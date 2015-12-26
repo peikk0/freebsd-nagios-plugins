@@ -86,6 +86,9 @@ if [ $(( ${now} - ${audit_file_age} )) -ge $(( 86400 \* ${audit_file_expire} )) 
         warning "audit file is older than ${audit_file_expire} days"
     fi
     fetch_audit_file="-F"
+    # ensure the audit file is writable before fetching it
+    # (pkg-audit makes it read-only after fetching it)
+    [ -f "${audit_file}" ] && chmod u+rw ${audit_file}
 fi
 
 pkg_vuln=`pkg audit -q -f "${audit_file}" "${fetch_audit_file}"`
