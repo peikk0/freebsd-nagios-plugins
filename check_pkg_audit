@@ -75,8 +75,10 @@ if [ ! -x "${pkg}" ]; then
     unknown "pkg executable not found"
 fi
 
-if [ ! -f "${audit_file}" -a "${do_not_fetch}" = 1 ]; then
-    critical "audit file not found"
+if [ -f "${audit_file}" ]; then
+    [ -r "${audit_file}" ] || critical "audit file not readable"
+else
+    [ "${do_not_fetch}" = 1 ] && critical "audit file not found"
 fi
 
 audit_file_age=`stat -f '%m' "${audit_file}" 2>/dev/null || echo 0`
@@ -88,7 +90,12 @@ if [ $(( ${now} - ${audit_file_age} )) -ge $(( 86400 \* ${audit_file_expire} )) 
     fetch_audit_file="-F"
     # ensure the audit file is writable before fetching it
     # (pkg-audit makes it read-only after fetching it)
-    [ -f "${audit_file}" ] && chmod u+rw ${audit_file}
+    if [ -f "${audit_file}" ]; then
+        [ -O "${audit_file}" ] || critical "audit file is not owned by this user, thus not writable"
+        chmod u+rw ${audit_file} || critical "error making audit file writable"
+        # this should logically never happen, but just in case...
+        [ -w "${audit_file}" ] || critical "audit file is not writable"
+    fi
 fi
 
 pkg_vuln=`pkg audit -q -f "${audit_file}" "${fetch_audit_file}"`
@@ -97,6 +104,8 @@ pkg_rc=$?
 if [ "${pkg_rc}" -eq 0 ]; then
     ok "0 vulnerable package|$(perf_data 0)"
 else
+    # no package listed on stdout? there was an unexpected error
+    [ -z "${pkg_vuln}" ] && critical "unexpected error from pkg, run manually to find out"
     pkg_vuln_count=`echo "${pkg_vuln}" | wc -l | tr -d '[:space:]'`
     pkg_vuln_oneline=`echo "${pkg_vuln}" | xargs echo`
     msg="${pkg_vuln_count} vulnerable package(s) - ${pkg_vuln_oneline}|$(perf_data ${pkg_vuln_count})"
