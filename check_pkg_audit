@@ -109,7 +109,7 @@ else
     pkg_vuln_count=`echo "${pkg_vuln}" | wc -l | tr -d '[:space:]'`
     pkg_vuln_oneline=`echo "${pkg_vuln}" | xargs echo`
     msg="${pkg_vuln_count} vulnerable package(s) - ${pkg_vuln_oneline}|$(perf_data ${pkg_vuln_count})"
-    if [ "${vuln_is_critical}" ]; then
+    if [ "${vuln_is_critical}" = 1 ]; then
         critical "${msg}"
     else
         warning "${msg}"
