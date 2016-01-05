@@ -98,7 +98,7 @@ if [ $(( ${now} - ${audit_file_age} )) -ge $(( 86400 \* ${audit_file_expire} )) 
     fi
 fi
 
-pkg_vuln=`pkg audit -q -f "${audit_file}" "${fetch_audit_file}"`
+pkg_vuln=`pkg audit -q -f "${audit_file}" ${fetch_audit_file}`
 pkg_rc=$?
 
 if [ "${pkg_rc}" -eq 0 ]; then
