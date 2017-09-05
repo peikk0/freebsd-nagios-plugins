@@ -100,6 +100,10 @@ fi
 
 pkg_vuln=`pkg audit -q -f "${audit_file}" ${fetch_audit_file}`
 pkg_rc=$?
+if [ -n "${fetch_audit_file}" ]; then
+    # make sure the audit file has a fresh timestamp to avoid refetching it too early next time
+    touch -m "${audit_file}"
+fi
 
 if [ "${pkg_rc}" -eq 0 ]; then
     ok "0 vulnerable package|$(perf_data 0)"
